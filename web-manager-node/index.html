@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Network Manager - Instances</title>
+    <link rel="stylesheet" href="/global.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="brand">
+          <h1>Network Manager - Instances</h1>
+          <p>Pure Node backend + JS frontend showing all connected instances</p>
+        </div>
+        <div class="actions">
+          <button id="open-tab" class="primary">Open Managed Instance</button>
+          <button id="refresh">Refresh</button>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="card">
+          <div class="metric">This instance ID</div>
+          <div id="my-id" class="metric-value id">-</div>
+        </div>
+        <div class="card">
+          <div class="metric">Connection</div>
+          <div id="ws-state" class="metric-value warning">Connecting...</div>
+        </div>
+        <div class="card">
+          <div class="metric">Online connected instances</div>
+          <div id="tabs-count" class="metric-value">0</div>
+        </div>
+        <div class="card">
+          <div class="metric">Last update</div>
+          <div id="last-update" class="metric-value">-</div>
+        </div>
+      </div>
+
+      <div class="panels">
+        <section class="card">
+          <div class="panel-head">
+            <h2 class="panel-title">Connected instances</h2>
+            <span class="small">Actions apply to instances connected to this app.</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Label</th>
+                <th>Page</th>
+                <th>Role</th>
+                <th>Last seen</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tabs-table"></tbody>
+          </table>
+        </section>
+
+        <section class="card">
+          <div class="panel-head">
+            <h2 class="panel-title">Events</h2>
+            <span class="small">Live events from connected instances</span>
+          </div>
+          <div id="logs" class="logs"></div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        tabs: [],
+        socket: null,
+      };
+
+      function getOrCreateTabId() {
+        const existing = sessionStorage.getItem("wm_tab_id");
+        if (existing) return existing;
+        const created = "tab-" + Math.random().toString(36).slice(2, 10);
+        sessionStorage.setItem("wm_tab_id", created);
+        return created;
+      }
+
+      function getLabel() {
+        const fromQuery = new URLSearchParams(location.search).get("label");
+        return fromQuery || `Managed ${windowTabId.slice(-4)}`;
+      }
+
+      const windowTabId = getOrCreateTabId();
+
+      function setConnectionState(text, cssClass) {
+        const el = document.getElementById("ws-state");
+        el.textContent = text;
+        el.className = "metric-value " + cssClass;
+      }
+
+      function formatTime(iso) {
+        if (!iso) return "-";
+        const date = new Date(iso);
+        return date.toLocaleTimeString();
+      }
+
+      function addLog(message, kind = "ok") {
+        const logs = document.getElementById("logs");
+        const item = document.createElement("div");
+        item.className = "log-item " + (kind || "");
+        item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logs.prepend(item);
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          headers: { "Content-Type": "application/json" },
+          ...options,
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(payload.error || "Request failed");
+        }
+        return payload;
+      }
+
+      function rowActions(tab) {
+        const cell = document.createElement("td");
+        const box = document.createElement("div");
+        box.className = "table-actions";
+
+        const quickActions = [
+          ["Ping", "ping"],
+          ["Highlight", "highlight"],
+          ["Reload", "reload"],
+          ["Close", "close"],
+        ];
+
+        quickActions.forEach(([label, action]) => {
+          const btn = document.createElement("button");
+          btn.textContent = label;
+          btn.onclick = async () => {
+            try {
+              await api(`/api/tabs/${tab.id}/${action}`, { method: "POST" });
+              addLog(`${action} sent to ${tab.id}`);
+            } catch (err) {
+              addLog(err.message, "danger");
+            }
+          };
+          box.appendChild(btn);
+        });
+
+        const navWrap = document.createElement("div");
+        navWrap.className = "navigate-wrap";
+        const input = document.createElement("input");
+        input.placeholder = "https://example.com";
+        const navBtn = document.createElement("button");
+        navBtn.textContent = "Navigate";
+        navBtn.onclick = async () => {
+          const url = input.value.trim();
+          if (!url) return;
+          try {
+            await api(`/api/tabs/${tab.id}/navigate`, {
+              method: "POST",
+              body: JSON.stringify({ url }),
+            });
+            addLog(`navigate sent to ${tab.id}`);
+          } catch (err) {
+            addLog(err.message, "danger");
+          }
+        };
+
+        navWrap.appendChild(input);
+        navWrap.appendChild(navBtn);
+        cell.appendChild(box);
+        cell.appendChild(navWrap);
+        return cell;
+      }
+
+      function renderTabs() {
+        const active = document.activeElement;
+        if (active && active.tagName === "INPUT") {
+          return;
+        }
+
+        const tbody = document.getElementById("tabs-table");
+        tbody.innerHTML = "";
+
+        state.tabs.forEach((tab) => {
+          const tr = document.createElement("tr");
+
+          const idTd = document.createElement("td");
+          idTd.innerHTML = `<span class="id">${tab.id}</span>`;
+
+          const labelTd = document.createElement("td");
+          labelTd.textContent = tab.label || "Untitled";
+
+          const pageTd = document.createElement("td");
+          pageTd.innerHTML = `
+            <div>${tab.title || "-"}</div>
+            <div class="small">${tab.url || "-"}</div>
+          `;
+
+          const roleTd = document.createElement("td");
+          roleTd.innerHTML = `<span class="badge">${tab.role || "managed"}</span>`;
+
+          const seenTd = document.createElement("td");
+          seenTd.textContent = formatTime(tab.lastSeen);
+
+          tr.appendChild(idTd);
+          tr.appendChild(labelTd);
+          tr.appendChild(pageTd);
+          tr.appendChild(roleTd);
+          tr.appendChild(seenTd);
+          tr.appendChild(rowActions(tab));
+
+          tbody.appendChild(tr);
+        });
+
+        document.getElementById("tabs-count").textContent = String(state.tabs.length);
+        document.getElementById("last-update").textContent = new Date().toLocaleTimeString();
+      }
+
+      function connectSocket() {
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+        const socket = new WebSocket(`${protocol}://${location.host}`);
+        state.socket = socket;
+
+        socket.onopen = () => {
+          setConnectionState("Connected", "ok");
+          socket.send(
+            JSON.stringify({
+              type: "register",
+              tabId: windowTabId,
+              label: getLabel(),
+              title: document.title,
+              url: location.href,
+              role: "managed",
+              userAgent: navigator.userAgent,
+            })
+          );
+          addLog(`registered as ${windowTabId}`);
+        };
+
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "tabs_snapshot") {
+            state.tabs = data.tabs || [];
+            renderTabs();
+          }
+
+          if (data.type === "tab_event") {
+            addLog(`${data.tabId}: ${data.event}`);
+          }
+
+          if (data.type === "command") {
+            handleCommand(data.command, data.payload || {});
+          }
+        };
+
+        socket.onclose = () => {
+          setConnectionState("Disconnected", "danger");
+          addLog("socket closed, retrying...", "warning");
+          setTimeout(connectSocket, 1200);
+        };
+
+        socket.onerror = () => {
+          setConnectionState("Error", "danger");
+        };
+      }
+
+      function sendHeartbeat() {
+        if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+        state.socket.send(
+          JSON.stringify({
+            type: "heartbeat",
+            tabId: windowTabId,
+            label: getLabel(),
+            title: document.title,
+            url: location.href,
+            role: "managed",
+          })
+        );
+      }
+
+      function handleCommand(command, payload) {
+        if (command === "ping") {
+          addLog("ping received");
+          if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+            state.socket.send(
+              JSON.stringify({
+                type: "tab_event",
+                event: "pong",
+                details: { from: windowTabId },
+              })
+            );
+          }
+          return;
+        }
+
+        if (command === "highlight") {
+          addLog("highlight received");
+          return;
+        }
+
+        if (command === "reload") {
+          addLog("reload received");
+          location.reload();
+          return;
+        }
+
+        if (command === "navigate") {
+          const to = String(payload.url || "").trim();
+          if (!to) return;
+          addLog(`navigate received: ${to}`);
+          location.href = to;
+          return;
+        }
+
+        if (command === "close") {
+          addLog("close received");
+          window.close();
+        }
+      }
+
+      document.getElementById("my-id").textContent = windowTabId;
+
+      document.getElementById("open-tab").onclick = () => {
+        const n = Math.floor(Math.random() * 1000);
+        const url = `${location.origin}/?label=Managed-${n}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+      };
+
+      document.getElementById("refresh").onclick = async () => {
+        try {
+          const payload = await api("/api/tabs");
+          state.tabs = payload.tabs || [];
+          renderTabs();
+          addLog("manual refresh complete");
+        } catch (err) {
+          addLog(err.message, "danger");
+        }
+      };
+
+      setInterval(sendHeartbeat, 5000);
+      window.addEventListener("focus", sendHeartbeat);
+      window.addEventListener("popstate", sendHeartbeat);
+
+      connectSocket();
+      fetch("/api/tabs")
+        .then((r) => r.json())
+        .then((payload) => {
+          state.tabs = payload.tabs || [];
+          renderTabs();
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>
