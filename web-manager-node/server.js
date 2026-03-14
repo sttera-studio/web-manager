@@ -7,7 +7,10 @@ const { WebSocketServer } = require("ws");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 3000);
 const INDEX_PATH = path.join(__dirname, "index.html");
+const INSTANCE_PATH = path.join(__dirname, "instance.html");
 const CSS_PATH = path.join(__dirname, "global.css");
+const JS_PATH = path.join(__dirname, "index.js");
+const INSTANCE_JS_PATH = path.join(__dirname, "instance.js");
 
 const tabs = new Map();
 
@@ -117,6 +120,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && reqUrl.pathname === "/instance") {
+    fs.readFile(INSTANCE_PATH, (err, file) => {
+      if (err) {
+        sendJson(res, 500, { error: "Could not load instance.html" });
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": file.length,
+        "Cache-Control": "no-store",
+      });
+      res.end(file);
+    });
+    return;
+  }
+
   if (req.method === "GET" && reqUrl.pathname === "/global.css") {
     fs.readFile(CSS_PATH, (err, file) => {
       if (err) {
@@ -125,6 +144,38 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(200, {
         "Content-Type": "text/css; charset=utf-8",
+        "Content-Length": file.length,
+        "Cache-Control": "no-store",
+      });
+      res.end(file);
+    });
+    return;
+  }
+
+  if (req.method === "GET" && reqUrl.pathname === "/index.js") {
+    fs.readFile(JS_PATH, (err, file) => {
+      if (err) {
+        sendJson(res, 500, { error: "Could not load index.js" });
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Content-Length": file.length,
+        "Cache-Control": "no-store",
+      });
+      res.end(file);
+    });
+    return;
+  }
+
+  if (req.method === "GET" && reqUrl.pathname === "/instance.js") {
+    fs.readFile(INSTANCE_JS_PATH, (err, file) => {
+      if (err) {
+        sendJson(res, 500, { error: "Could not load instance.js" });
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/javascript; charset=utf-8",
         "Content-Length": file.length,
         "Cache-Control": "no-store",
       });
@@ -171,18 +222,9 @@ const server = http.createServer(async (req, res) => {
     let payload = {};
 
     if (action === "ping") command = "ping";
-    if (action === "highlight") command = "highlight";
+    if (action === "trigger-audio") command = "trigger_audio";
+    if (action === "trigger-webgl") command = "trigger_webgl";
     if (action === "reload") command = "reload";
-    if (action === "close") command = "close";
-    if (action === "navigate") {
-      const to = String(parsedBody.url || "").trim();
-      if (!to) {
-        sendJson(res, 400, { error: "Missing url field" });
-        return;
-      }
-      command = "navigate";
-      payload = { url: to };
-    }
 
     if (!command) {
       sendJson(res, 404, { error: "Unknown tab action" });

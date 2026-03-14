@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instance</title>
+    <link rel="stylesheet" href="/global.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="brand">
+          <h1>Instance</h1>
+        </div>
+        <div class="actions">
+          <button id="go-panel">Open Network Panel</button>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="card">
+          <div class="metric">Instance ID</div>
+          <div id="instance-id" class="metric-value id">-</div>
+        </div>
+        <div class="card">
+          <div class="metric">Connection</div>
+          <div id="ws-state" class="metric-value warning">Connecting...</div>
+        </div>
+        <div class="card">
+          <div class="metric">Audio API</div>
+          <div id="audio-state" class="metric-value">idle</div>
+        </div>
+        <div class="card">
+          <div class="metric">WebGL API</div>
+          <div id="webgl-state" class="metric-value">idle</div>
+        </div>
+      </div>
+
+      <div class="panels">
+        <section class="card">
+          <div class="panel-head">
+            <h2 class="panel-title">Instance controls</h2>
+            <span class="small">Run browser APIs and report events to panel</span>
+          </div>
+          <div class="actions" style="margin-top: 10px">
+            <button id="trigger-audio" class="primary">Trigger Web Audio</button>
+            <button id="trigger-webgl">Trigger WebGL</button>
+            <button id="trigger-performance">Performance</button>
+          </div>
+          <div id="webgl-area" class="webgl-area">
+            <canvas id="webgl-canvas" width="420" height="180"></canvas>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="panel-head">
+            <h2 class="panel-title">Local events</h2>
+            <span class="small">What this instance sends to the network panel</span>
+          </div>
+          <div id="logs" class="logs"></div>
+        </section>
+      </div>
+    </div>
+
+    <script src="/instance.js"></script>
+  </body>
+</html>
