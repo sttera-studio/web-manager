@@ -4,6 +4,8 @@
 const state = {
   tabs: [],
   socket: null,
+  tabLogs: {},
+  selectedTabId: null,
 };
 
 function getOrCreateTabId() {
@@ -33,12 +35,40 @@ function formatTime(iso) {
   return date.toLocaleTimeString();
 }
 
-function addLog(message, kind = "ok") {
+function addLog(message, kind = "ok", tabId = null) {
+  if (!tabId) return;
+  if (!state.tabLogs[tabId]) state.tabLogs[tabId] = [];
+  const entry = { message, kind, time: new Date().toLocaleTimeString() };
+  state.tabLogs[tabId].unshift(entry);
+  if (state.selectedTabId === tabId) {
+    appendLogItem(entry);
+  }
+}
+
+function appendLogItem(entry) {
   const logs = document.getElementById("logs");
   const item = document.createElement("div");
-  item.className = "log-item " + (kind || "");
-  item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+  item.className = "log-item " + (entry.kind || "");
+  item.textContent = `[${entry.time}] ${entry.message}`;
   logs.prepend(item);
+}
+
+function renderLogs() {
+  const logs = document.getElementById("logs");
+  const subtitle = document.getElementById("events-subtitle");
+  logs.innerHTML = "";
+  if (!state.selectedTabId) {
+    subtitle.textContent = "Click a row to see its events";
+    logs.innerHTML = '<div class="logs-hint">Select a tab from the table above to view its events.</div>';
+    return;
+  }
+  subtitle.textContent = state.selectedTabId;
+  const entries = state.tabLogs[state.selectedTabId] || [];
+  if (entries.length === 0) {
+    logs.innerHTML = '<div class="logs-hint">No events yet for this tab.</div>';
+    return;
+  }
+  entries.forEach(appendLogItem);
 }
 
 async function api(path, options = {}) {
@@ -72,9 +102,9 @@ function rowActions(tab) {
     btn.onclick = async () => {
       try {
         await api(`/api/tabs/${tab.id}/${action}`, { method: "POST" });
-        addLog(`${action} sent to ${tab.id}`);
+        addLog(`${action} sent`, "ok", tab.id);
       } catch (err) {
-        addLog(err.message, "danger");
+        addLog(err.message, "danger", tab.id);
       }
     };
     box.appendChild(btn);
@@ -95,9 +125,19 @@ function renderTabs() {
 
   state.tabs.forEach((tab) => {
     const tr = document.createElement("tr");
+    if (state.selectedTabId === tab.id) tr.classList.add("selected");
+    tr.style.cursor = "pointer";
+    tr.onclick = (e) => {
+      if (e.target.tagName === "BUTTON") return;
+      state.selectedTabId = tab.id;
+      document.querySelectorAll("#tabs-table tr").forEach((r) => r.classList.remove("selected"));
+      tr.classList.add("selected");
+      renderLogs();
+    };
 
     const idTd = document.createElement("td");
-    idTd.innerHTML = `<span class="id">${tab.id}</span>`;
+    const isCurrent = tab.id === windowTabId;
+    idTd.innerHTML = `<span class="id">${tab.id}</span>${isCurrent ? ' <span class="current-badge">(current)</span>' : ''}`;
 
     const labelTd = document.createElement("td");
     labelTd.textContent = tab.label || "Untitled";
@@ -158,7 +198,7 @@ function connectSocket() {
     }
 
     if (data.type === "tab_event") {
-      addLog(`${data.tabId}: ${data.event}`);
+      addLog(data.event, "ok", data.tabId);
     }
 
     if (data.type === "command") {

@@ -12,6 +12,6 @@
   "license": "GPL-3.0-only",
   "type": "commonjs",
   "dependencies": {
-    "ws": "^8.19.0"
+    "ws": "^8.20.0"
   }
 }
