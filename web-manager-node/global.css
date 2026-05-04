@@ -39,16 +39,10 @@ body {
   margin-bottom: 16px;
 }
 
-.brand h1 {
+.header h1 {
   margin: 0;
   font-size: 1.35rem;
   letter-spacing: 0.3px;
-}
-
-.brand p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 0.92rem;
 }
 
 .actions {
@@ -107,10 +101,44 @@ button:hover {
   font-weight: 500;
 }
 
+.summary-line {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .panels {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.room-card {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.room-card.selected {
+  border-color: rgba(96, 165, 250, 0.6);
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.room-name {
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 .panel-head {
@@ -169,6 +197,21 @@ th {
   border: 1px solid var(--border);
 }
 
+.role-manager {
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #93c5fd;
+}
+
+.role-instance {
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+
+.room-pill {
+  border-color: rgba(251, 191, 36, 0.45);
+  color: #fcd34d;
+}
+
 .ok {
   color: var(--good);
 }
@@ -205,7 +248,7 @@ tbody tr.selected {
 
 .logs {
   margin-top: 10px;
-  max-height: 180px;
+  max-height: 240px;
   overflow: auto;
   font-size: 0.82rem;
 }
@@ -259,5 +302,10 @@ tbody tr.selected {
   .header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .summary-line {
+    flex-direction: column;
+    gap: 8px;
   }
 }

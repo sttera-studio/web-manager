@@ -1,22 +1,42 @@
 # web-manager
 
-Pure Node application for web instance management.
+Node app for managing browser clients in rooms.
 
 ```sh
-cd web-manager-node
-npm init -y
-npm install ws
-node server.js
+# Windows
+.\install_and_run.bat
+
+# Linux
+chmod +x install_and_run.sh
+./install_and_run.sh
 ```
 
-Open in your normal browser:
+Open:
 
-```sh
-xdg-open http://127.0.0.1:3000
-```
+- Manager: http://127.0.0.1:3000
+- Client page: http://127.0.0.1:3000/instance
 
 Optional quick check:
 
 ```sh
 curl http://127.0.0.1:3000/api/health
 ```
+
+Run tests:
+
+```sh
+cd web-manager-node
+npm test
+```
+
+One-line test command:
+
+```sh
+cd web-manager-node && npm test
+```
+
+Tests currently cover:
+
+- room normalization
+- room action command mapping
+- room link generation

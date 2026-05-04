@@ -2,7 +2,19 @@ const state = {
   socket: null,
   audioContext: null,
   gl: null,
+  room: "lobby",
 };
+
+const ROOM_STORAGE_KEY = "wm_instance_room";
+
+function normalizeRoom(raw) {
+  const cleaned = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 32);
+  return cleaned || "lobby";
+}
 
 function getOrCreateInstanceId() {
   const existing = sessionStorage.getItem("wm_instance_id");
@@ -17,6 +29,13 @@ const instanceId = getOrCreateInstanceId();
 function getLabel() {
   const fromQuery = new URLSearchParams(location.search).get("label");
   return fromQuery || `Instance ${instanceId.slice(-4)}`;
+}
+
+function getInitialRoom() {
+  const params = new URLSearchParams(location.search);
+  const fromQuery = params.get("room");
+  const fromSession = sessionStorage.getItem(ROOM_STORAGE_KEY);
+  return normalizeRoom(fromQuery || fromSession || "lobby");
 }
 
 function setState(id, text, cssClass = "") {
@@ -54,6 +73,7 @@ function sendHeartbeat() {
       title: document.title,
       url: location.href,
       role: "instance",
+      room: state.room,
     })
   );
 }
@@ -90,11 +110,12 @@ function connectSocket() {
         title: document.title,
         url: location.href,
         role: "instance",
+        room: state.room,
         userAgent: navigator.userAgent,
       })
     );
-    addLog(`registered as ${instanceId}`);
-    sendEvent("instance_connected", { role: "instance" });
+    addLog(`registered as ${instanceId} in room ${state.room}`);
+    sendEvent("instance_connected", { role: "instance", room: state.room });
   };
 
   socket.onclose = () => {
@@ -161,14 +182,14 @@ async function triggerAudio() {
     osc.start(t);
     osc.stop(t + 0.25);
 
-    setState("audio-state", "triggered", "ok");
+    setState("webgl-state", "audio triggered", "ok");
     addLog("Web Audio triggered");
     sendEvent("web_audio_triggered", {
       sampleRate: state.audioContext.sampleRate,
       state: state.audioContext.state,
     });
   } catch (err) {
-    setState("audio-state", "failed", "danger");
+    setState("webgl-state", "audio failed", "danger");
     addLog(`Web Audio failed: ${err.message}`, "danger");
     sendEvent("web_audio_failed", { message: err.message });
   }
@@ -198,52 +219,15 @@ function triggerWebGL() {
   sendEvent("webgl_triggered", { version, color });
 }
 
-function getFullscreenElement() {
-  return document.fullscreenElement || document.webkitFullscreenElement || null;
-}
-
-async function triggerPerformance() {
-  const area = document.getElementById("webgl-area");
-  try {
-    const activeFullscreen = getFullscreenElement();
-    if (!activeFullscreen) {
-      if (area.requestFullscreen) {
-        await area.requestFullscreen();
-      } else if (area.webkitRequestFullscreen) {
-        area.webkitRequestFullscreen();
-      }
-      setState("webgl-state", "performance mode", "ok");
-      addLog("Performance mode enabled");
-      sendEvent("performance_enabled", { fullscreen: true });
-      return;
-    }
-
-    if (document.exitFullscreen) {
-      await document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    }
-    setState("webgl-state", state.gl ? "triggered" : "idle", state.gl ? "ok" : "");
-    addLog("Performance mode disabled");
-    sendEvent("performance_disabled", { fullscreen: false });
-  } catch (err) {
-    addLog(`Performance failed: ${err.message}`, "danger");
-    sendEvent("performance_failed", { message: err.message });
-  }
-}
-
 document.getElementById("instance-id").textContent = instanceId;
+state.room = getInitialRoom();
+sessionStorage.setItem(ROOM_STORAGE_KEY, state.room);
+document.getElementById("instance-room").textContent = state.room;
 
-document.getElementById("trigger-audio").onclick = triggerAudio;
-document.getElementById("trigger-webgl").onclick = triggerWebGL;
-document.getElementById("trigger-performance").onclick = triggerPerformance;
 document.getElementById("go-panel").onclick = () => {
-  window.open("/", "_blank", "noopener,noreferrer");
+  const params = new URLSearchParams({ room: state.room });
+  window.open(`/?${params.toString()}`, "_blank", "noopener,noreferrer");
 };
-
-document.addEventListener("fullscreenchange", updateWebGLViewport);
-document.addEventListener("webkitfullscreenchange", updateWebGLViewport);
-window.addEventListener("resize", updateWebGLViewport);
 
 setInterval(sendHeartbeat, 5000);
 window.addEventListener("focus", sendHeartbeat);
