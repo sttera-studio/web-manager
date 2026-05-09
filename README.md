@@ -1,4 +1,4 @@
-# web-manager
+# node-client-manager
 
 Node app for managing browser clients in rooms.
 
